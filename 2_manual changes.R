@@ -6,6 +6,8 @@ setwd("~/Spring 2019 Classes/BANA8083-Case Study")
 modern.era <- read.csv(file = paste(getwd(), "/data/modern_era_raw.csv", sep = ""), stringsAsFactors =  FALSE)
 
 #remove all duplicate songs - only keep first occurrence of each
+#NOTE: initially was deleting duplicate song titles of different artists (!)
+#this is fixed in the file 2-5_add_missing_songs
 modern.era <- modern.era %>%
   distinct(song, .keep_all = TRUE)
 

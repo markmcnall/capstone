@@ -3,7 +3,7 @@ library(ggplot2)
 library(tidytext)
 
 #set up color palette for each decade
-my_colors <- c("#758c33", "#f8ca38", "#ca7cd8", "#287e9e", "#ff6200", "#fe3c71")
+my_colors <- c("#e81b23", "#758c33", "#f8ca38", "#ca7cd8", "#287e9e", "#ff6200", "#fe3c71")
 
 #create custom theme
 theme_songs <- function(aticks = element_blank(),
@@ -50,16 +50,79 @@ songs %>%
   ggplot() +
   geom_bar(aes(x = decade, y = number_of_songs, fill = decade), stat = "identity") +
   theme_songs() +
-  scale_fill_manual(values = c("red", my_colors)) +
+  scale_fill_manual(values = my_colors) +
   ggtitle("Number 1 Hits by Decade") +
   labs(x = NULL, y = "Song Count")
 
+#songs per year
+num_songs_year <- songs %>%
+  select(song, year, decade) %>%
+  group_by(year, decade) %>%
+  summarise(song_count = n())
+
+#radial chart - songs per year
+#!!!!!!!!!!!need to fix
+id <- seq_len(nrow(songs_year))
+songs_year <- cbind(songs_year, id)
+label_data = songs_year
+number_of_bar = nrow(label_data) #Calculate the ANGLE of the labels
+angle = 90 - 360 * (label_data$id - 0.5) / number_of_bar #Center things
+label_data$hjust <- ifelse(angle < -90, 1, 0) #Align label
+label_data$angle <- ifelse(angle < -90, angle + 180, angle) #Flip angle
+ggplot(songs_year, aes(x = as.factor(id), y = song_count)) +
+  geom_bar(stat = "identity", fill = alpha("purple", 0.7)) +
+  geom_text(data = label_data, aes(x = id, y = song_count + 10, label = year, hjust = hjust), color = "black", alpha = 0.6, size = 3, angle =  label_data$angle, inherit.aes = FALSE ) +
+  coord_polar(start = 0) +
+  ylim(-20, 150) + #Size of the circle
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        plot.margin = unit(rep(-4,4), "in"),
+        plot.title = element_text(margin = margin(t = 10, b = -10)))
+
+#same thing, but more traditional plot
+num_songs_year %>%
+  ggplot(aes(year, song_count, fill = decade)) +
+  geom_col() +
+  geom_smooth(method = "loess", se = FALSE, aes(group = 1), color = "#5d5f63") +
+  scale_fill_manual(values = my_colors) +
+  theme_songs() +
+  ggtitle("#1 Hits Per Year") +
+  labs(x = NULL, y = "Song Count")
+
+#lowest and highest years
+num_songs_year %>%
+  arrange(song_count) %>%
+  head()
+
+songs %>%
+  filter(year == 2016) %>%
+  select(song, artist)
+
+num_songs_year %>%
+  arrange(desc(song_count)) %>%
+  head()
+
+#total unique artists - first have to split artists
+songs %>%
+  mutate(artist_split = as.character(sapply(strsplit(artist," featuring "), "[", 1))) %>%
+  group_by(artist_split) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(5)
+
+#how many artists have only appeared once
+songs %>%
+  mutate(artist_split = as.character(sapply(strsplit(artist," featuring "), "[", 1))) %>%
+  group_by(artist_split) %>%
+  summarise(count = n()) %>%
+  filter(count == 1)
 
 
-
-#############
-#text mining#
-#############
+##################
+#text mining prep#
+##################
 #first remove unnecessary words - list used from Debbie Liske
 undesirable_words <- c("chorus", "repeat", "lyrics", 
                        "theres", "bridge", "fe0f", "yeah", "baby", 
@@ -71,6 +134,7 @@ undesirable_words <- c("chorus", "repeat", "lyrics",
                        "repeats")
 
 #also need to remove stop_words
+#what are stop words?
 head(sample(stop_words$word, 15), 15)
 
 #songs filtered is unnested, tokenization of unique words in lyrics
@@ -84,46 +148,51 @@ songs_filtered <- songs %>%
 class(songs_filtered)
 dim(songs_filtered)
 
+#some testing
 songs_filtered %>%
   filter(word == "love") %>%
   select(word, song, artist, year) %>%
   arrange() %>%
   top_n(10, song)
 
-#word count by decade - full length
-full_word_count <- songs %>%
+################
+#Word frequency#
+################
+#word frequency by decade - full length
+full_word_count_song <- songs %>%
   unnest_tokens(word, lyrics) %>%
   group_by(song, decade, year) %>%
   summarise(num_words = n()) %>%
   arrange(desc(num_words))
 
 #songs with most total words
-full_word_count[1:10,] %>%
+#!!! would be interesting to compare to length of song (time)
+full_word_count_song[1:10,] %>%
   select(song, num_words, year)
 
+#some summary stats
+mean(full_word_count_song$num_words)
+sd(full_word_count_song$num_words)
+
 #songs with least total words
-full_word_count %>%
+full_word_count_song %>%
   filter(!num_words == 1) %>%
   tail(10) %>%
   select(song, num_words, year) %>%
   arrange(num_words)
 
 #visualize word count distribution
-full_word_count %>%
+#!!!!!!!!make prettier
+full_word_count_song %>%
   ggplot() +
   geom_histogram(aes(x = num_words, fill = decade), binwidth = 25) +
   ylab("Song Count") +
-  xlab("Total number of words") +
-  ggtitle("Distribution of total words per song") +
-  theme(plot.title = element_text(hjust = 0.5), 
-        legend.title = element_blank())
-
-#summary statistics
-mean(full_word_count$num_words)
-sd(full_word_count$num_words)
+  xlab("Total Number of Words") +
+  ggtitle("Total Words Per Song")
+  #theme_songs()
 
 #lets repeat above steps, but only looking at unique words
-partial_word_count <- songs %>%
+partial_word_count_song <- songs %>%
   unnest_tokens(word, lyrics) %>%
   anti_join(stop_words) %>%
   distinct() %>%
@@ -134,26 +203,76 @@ partial_word_count <- songs %>%
   arrange(desc(num_words))
 
 #songs with most unique, distinct words
-partial_word_count[1:10,] %>%
+partial_word_count_song[1:10,] %>%
   select(song, num_words, year)
 
 #songs with least total words
-partial_word_count %>%
+partial_word_count_song %>%
   filter(!num_words == 1) %>%
   tail(10) %>%
   select(song, num_words, year) %>%
   arrange(num_words)
 
+#check out Love Me Do
+songs %>%
+  filter(song == "Love Me Do") %>%
+  unnest_tokens(word, lyrics) %>%
+  anti_join(stop_words) %>%
+  distinct() %>%
+  filter(!word %in% undesirable_words) %>%
+  filter(nchar(word) > 3) %>%
+  select(word)
+
 #visualize
-partial_word_count %>%
+#!!!!!!!!!!make prettier
+partial_word_count_song %>%
   ggplot() +
-  geom_histogram(aes(x = num_words), binwidth = 5) +
+  geom_histogram(aes(x = num_words, fill = decade), binwidth = 5) +
   ylab("Song Count") +
   xlab("Total number of words") +
   ggtitle("Distribution of total words per song") +
   theme(plot.title = element_text(hjust = 0.5), 
         legend.title = element_blank())
 
+#number of words used over time - both total and unique
+#average words per year
+full_word_count_year <- songs %>%
+  unnest_tokens(word, lyrics) %>%
+  group_by(year, decade) %>%
+  summarise(num_words = n())
+
+#note we join with num_songs_year to calculate the average per year 
+full_word_count_year %>%
+  inner_join(num_songs_year) %>%
+  ggplot(aes(year, num_words/song_count, fill = decade)) +
+  geom_col() +
+  scale_fill_manual(values = my_colors) +
+  theme_songs() +
+  labs(x = NULL, y = "Average Total Words") +
+  ggtitle("Average Total Words By Year")
+
+#average unique words per year
+unique_word_count_year <- songs %>%
+  unnest_tokens(word, lyrics) %>%
+  anti_join(stop_words) %>%
+  distinct() %>%
+  filter(!word %in% undesirable_words) %>%
+  filter(nchar(word) > 3) %>%
+  group_by(year, decade) %>%
+  summarise(num_words = n())
+
+unique_word_count_year %>%
+  inner_join(num_songs_year) %>%
+  ggplot(aes(year, num_words/song_count, fill = decade)) +
+  geom_col() +
+  scale_fill_manual(values = my_colors) +
+  theme_songs() +
+  labs(x = NULL, y = "Average Unique Count") +
+  ggtitle("Average Unique Words By Year")
+
+############
+#Word count#
+############
 #most frequently used words
 songs_filtered %>%
   count(word, sort = TRUE) %>%
@@ -171,37 +290,64 @@ popular_words <- songs_filtered %>%
   arrange(decade, n) %>%
   mutate(row = row_number())
 
+#most used words by decade
 popular_words %>%
   ggplot() +
   geom_col(aes(row, n, fill = decade), show.legend = FALSE) +
   scale_fill_manual(values = my_colors) +
-  labs(x = NULL, y = "Song Count") +
+  labs(x = NULL, y = NULL) +
   ggtitle("Popular Words by Decade") +
   facet_wrap(~decade, scales = "free") +
-  theme(plot.title = element_text(hjust = 0.5)) +
+  theme_songs() +
   scale_x_continuous(breaks = popular_words$row, labels = popular_words$word) + 
+  scale_y_continuous(labels = NULL) +
   coord_flip()
 
+#############
+#word length#
+#############
 #word lengths
+#first must remove all instrumental songs
 word_lengths <- songs %>%
+  filter(!is.na(lyrics)) %>%
   unnest_tokens(word, lyrics) %>%
   group_by(song, decade) %>%
   distinct() %>%
   filter(!word %in% undesirable_words) %>%
   mutate(word_length = nchar(word))
 
+#total distribution of word length
+word_lengths %>%
+  count(word_length, sort = TRUE) %>%
+  ggplot(aes(word_length)) +
+  geom_histogram(fill = "forestgreen", color = "black", breaks = seq(1, 20, by = 1)) +
+  ggtitle("Word Length") +
+  labs(x = "Word Length", y = NULL) +
+  theme_songs()
+
+#word length by decade
 word_lengths %>%
   filter(!decade == "1950s") %>%
   count(word_length, sort = TRUE) %>%
   ggplot(aes(word_length), binwidth = 10) +
-  geom_histogram(aes(fill = decade), breaks = seq(1, 25, by = 2), show.legend = FALSE) +
+  geom_histogram(aes(fill = decade), breaks = seq(1, 20, by = 1), show.legend = FALSE) +
   scale_fill_manual(values = my_colors) +
   facet_wrap(~decade, scales = "free") +
   xlab("Word Length") +
   ylab("Song Count") +
   ggtitle("Word Length Distribution") +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme_songs()
 
+#longest words
+word_lengths %>%
+  filter(word_length >= 15) %>%
+  arrange(desc(word_length))
+
+#!!!!this brings up the issue of some songs' lyrics being wrong - The Hills, Dominique
+
+###################
+#lexical diversity#
+###################
 #lexical diversity - number of total unique words
 lex_div <- songs %>%
   unnest_tokens(word, lyrics) %>%
@@ -217,6 +363,19 @@ lex_div %>%
   xlab('') +
   ylab('') +
   theme(plot.title = element_text(hjust = 0.5))
+
+#total words per year
+songs %>%
+  unnest_tokens(word, lyrics) %>%
+  group_by(song, year) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(year, count)) +
+  geom_point(color = "orange", alpha = 0.4, size = 3, position = "jitter") +
+  stat_smooth(color = "black", method = "lm", se = FALSE) +
+  geom_smooth(aes(x = year, y = count), se = FALSE, color = "blue") +
+  ggtitle("Total Words") +
+  labs(x = "Year", y = NULL) +
+  theme_songs()
 
 #lexical density - unique words / total words, shows reptition
 lex_den <- songs %>%
