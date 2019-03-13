@@ -81,6 +81,7 @@ year_avg %>%
   geom_line(aes(x = year, y = zoo::rollmean(avg, 5, na.pad = TRUE)))
   
 #min and max years
+#min
 year_avg %>%
   arrange(avg) %>%
   head(5)
@@ -89,3 +90,13 @@ compression %>%
   filter(year == 1991) %>%
   select(song, artist, ratio) %>%
   arrange(desc(ratio))
+
+#max
+year_avg %>%
+  arrange(desc(avg)) %>%
+  head(5)
+
+compression %>%
+  filter(year %in% c(2015, 2016)) %>%
+  select(year, song, artist, ratio) %>%
+  arrange(year, desc(ratio))

@@ -44,14 +44,16 @@ sum(is.na(songs$decade))
 #descriptive statistics#
 ########################
 #how many songs each decade?
-songs %>%
+songs_per_decade <- songs %>%
   group_by(decade) %>%
-  summarise(number_of_songs = n()) %>%
+  summarise(number_of_songs = n())
+
+songs_per_decade %>%
   ggplot() +
   geom_bar(aes(x = decade, y = number_of_songs, fill = decade), stat = "identity") +
   theme_songs() +
   scale_fill_manual(values = my_colors) +
-  ggtitle("Number 1 Hits by Decade") +
+  ggtitle("#1 Hits by Decade") +
   labs(x = NULL, y = "Song Count")
 
 #songs per year
@@ -97,7 +99,7 @@ num_songs_year %>%
   head()
 
 songs %>%
-  filter(year == 2016) %>%
+  filter(year == 2002) %>%
   select(song, artist)
 
 num_songs_year %>%
@@ -117,7 +119,8 @@ songs %>%
   mutate(artist_split = as.character(sapply(strsplit(artist," featuring "), "[", 1))) %>%
   group_by(artist_split) %>%
   summarise(count = n()) %>%
-  filter(count == 1)
+  filter(count == 1) %>%
+  nrow()
 
 
 ##################
@@ -148,12 +151,50 @@ songs_filtered <- songs %>%
 class(songs_filtered)
 dim(songs_filtered)
 
-#some testing
+######
+#LOVE#
+######
+#some testing - how many songs contain the word love?
 songs_filtered %>%
+  filter(word == "love")  %>%
+  nrow()
+
+622 / 1086
+
+#total uses of word love?
+songs %>%
+  unnest_tokens(word, lyrics) %>%
+  group_by(song, decade, year) %>%
+  filter(word == "love") %>%
+  nrow()
+
+#uses of love by decade
+#not worth reporting...haha
+songs %>%
+  unnest_tokens(word, lyrics) %>%
+  select(word, song, year, decade) %>%
+  filter(word == "love") %>%
+  group_by(decade) %>%
+  summarise(n = n()) %>%
+  mutate(n.2 = n / songs_per_decade$number_of_songs) %>%
+  ggplot() +
+  geom_bar(aes(x = decade, y = n.2, fill = decade), stat = "identity") +
+  theme_songs() +
+  scale_fill_manual(values = my_colors) +
+  ggtitle("Uses of 'Love' per decade") +
+  labs(x = NULL, y = NULL)
+  
+
+#most uses of love in a single song
+songs %>%
+  unnest_tokens(word, lyrics) %>%
   filter(word == "love") %>%
   select(word, song, artist, year) %>%
-  arrange() %>%
-  top_n(10, song)
+  group_by(song, artist, year) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  head(5)
+
 
 ################
 #Word frequency#
